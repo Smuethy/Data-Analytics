@@ -38,7 +38,7 @@ ui <- dashboardPage(
                href = "https://en.wikipedia.org/wiki/List_of_Spotify_streaming_records")
     )
   ),
-  dashboardBody(
+  dashboardBody(  
     tags$head(
       # Google Fonts link + custom CSS
       tags$link(rel = "stylesheet", 
@@ -65,13 +65,33 @@ ui <- dashboardPage(
                 box(
                   title = "Scatter Plot", status = "warning", solidHeader = TRUE,
                   collapsible = TRUE, width = 6,
-                  plotlyOutput("scatter_plot", height = 300)
+                  plotlyOutput("scatter_plot", height = 400)
                 )
               ),
+              
               fluidRow(
                 box(
+                  title = "Bar Plot: Top Artists", status = "success", solidHeader = TRUE,
+                  collapsible = TRUE, width = 6,
+                  plotlyOutput("bar_plot", height = 300)
+                ),
+                box(
+                  title = "Line Plot: Streams over Rank", status = "info", solidHeader = TRUE,
+                  collapsible = TRUE, width = 6,
+                  plotlyOutput("line_plot", height = 300)
+                )
+              ),
+              
+              fluidRow(
+                box(
+                  title = "Pie Chart: Streams Share (Top 5 Artists)", status = "danger", solidHeader = TRUE,
+                  collapsible = TRUE, width = 6,
+                  plotlyOutput("pie_plot", height = 300)
+                ),
+                box(
                   title = "Controls & Filters", status = "info", solidHeader = TRUE,
-                  collapsible = TRUE, width = 12,
+                  collapsible = TRUE, width = 6,
+                  
                   sliderInput("slider", "Number of observations:", 
                               min = 1, max = nrow(streamed_table), value = nrow(streamed_table)),
                   
@@ -88,10 +108,6 @@ ui <- dashboardPage(
                   downloadButton("download", "Download Data")
                 )
               )
-      ),
-      tabItem(tabName = "datatable",
-              h2("Scraped Spotify Data Table"),
-              DTOutput("data_table")
       )
     )
   )
@@ -163,6 +179,51 @@ server <- function(input, output, session) {
       write.csv(data_subset(), file, row.names = FALSE)
     }
   )
+  output$bar_plot <- renderPlotly({
+    df <- data_subset() %>% 
+      group_by(`Artist(s)`) %>% 
+      summarise(Total_Streams = sum(Streams), .groups = 'drop') %>% 
+      arrange(desc(Total_Streams)) %>% 
+      slice_head(n = 10)
+    
+    p <- ggplot(df, aes(x = reorder(`Artist(s)`, Total_Streams), y = Total_Streams)) +
+      geom_bar(stat = "identity", fill = "darkgreen") +
+      coord_flip() +
+      labs(title = "Top 10 Artists by Streams", x = "Artist", y = "Total Streams (Billions)") +
+      theme_minimal(base_family = "Lato") +
+      theme(plot.title = element_text(face = "bold"))
+    ggplotly(p)
+  })
+  
+  output$line_plot <- renderPlotly({
+    df <- data_subset()
+    p <- ggplot(df, aes(x = Rank, y = Streams)) +
+      geom_line(color = "blue") +
+      geom_point(color = "red", size = 1) +
+      labs(title = "Streams Over Rank", x = "Rank", y = "Streams (Billions)") +
+      theme_minimal(base_family = "Lato") +
+      theme(plot.title = element_text(face = "bold"))
+    ggplotly(p)
+  })
+  
+  output$pie_plot <- renderPlotly({
+    df <- data_subset() %>% 
+      group_by(`Artist(s)`) %>% 
+      summarise(Total_Streams = sum(Streams), .groups = 'drop') %>% 
+      arrange(desc(Total_Streams)) %>% 
+      slice_head(n = 5)
+    
+    plot_ly(
+      df,
+      labels = ~`Artist(s)`,
+      values = ~Total_Streams,
+      type = 'pie',
+      textinfo = 'label+percent',
+      insidetextorientation = 'radial'
+    ) %>%
+      layout(title = "Top 5 Artists Stream Share")
+  })
+  
 }
 
 shinyApp(ui, server)
